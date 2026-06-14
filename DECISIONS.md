@@ -1,215 +1,159 @@
-# Decision Log
+# DECISIONS.md
 
-This file records significant product and engineering decisions made for the shared expenses app.
+## Decision 1: PostgreSQL
 
-## 1. Use PostgreSQL as the only database
+Options:
 
-Options considered:
+* MongoDB
+* PostgreSQL
 
-- SQLite for local simplicity.
-- MongoDB/document storage.
-- PostgreSQL.
+Chosen:
 
-Decision:
+* PostgreSQL
 
-Use PostgreSQL.
+Reason:
+Assignment explicitly requires a relational database.
 
-Why:
+---
 
-The assignment requires relational databases only. The domain is naturally relational: users, groups, memberships, expenses, split rows, and settlements all need joins and transactional writes. PostgreSQL also works well with Neon for deployment.
+## Decision 2: Membership History
 
-## 2. Store expenses in INR, preserve original currency metadata
+Options:
 
-Options considered:
+* Current members only
+* Historical membership records
 
-- Store all amounts exactly as entered and convert during balance calculation.
-- Store all amounts in INR after conversion.
-- Store both original and converted amounts separately.
+Chosen:
 
-Decision:
+* Historical membership records
 
-Store `expenses.amount` in INR, while also storing `currency` and `fx_rate`.
+Reason:
+Required to correctly handle join and leave dates.
 
-Why:
+---
 
-Balance calculations stay simple and consistent. The original currency and conversion rate remain auditable for Priya's USD concern. The importer logs each conversion.
+## Decision 3: Store Expenses In INR
 
-Tradeoff:
+Options:
 
-The exact original foreign amount is not stored as a separate numeric column. It can be inferred as `amount / fx_rate`, but a future version could add `original_amount`.
+* Store original currency
+* Store normalized INR value
 
-## 3. Use a fixed FX rate for CSV import
+Chosen:
 
-Options considered:
+* Store INR value with original currency metadata
 
-- Use live historical exchange-rate API.
-- Ask the user to enter a rate during import.
-- Use a documented fixed rate.
+Reason:
+Simplifies balance calculations.
 
-Decision:
+---
 
-Use a fixed USD rate of `83` for the provided assignment import.
+## Decision 4: Two-Phase CSV Import
 
-Why:
+Options:
 
-The app needs deterministic results for review and live evaluation. A live API would make the same CSV produce different balances over time or fail offline.
+* Direct import
+* Preview then import
 
-Tradeoff:
+Chosen:
 
-This is not a financial-grade historical FX source. It is documented and visible in the anomaly report.
+* Preview then import
 
-## 4. Two-phase CSV import
+Reason:
+Supports user approval and prevents silent data changes.
 
-Options considered:
+---
 
-- Import immediately and reject bad rows.
-- Import immediately and silently fix obvious problems.
-- Preview, surface anomalies, then confirm.
+## Decision 5: Soft Delete Expenses
 
-Decision:
+Options:
 
-Use preview and confirm.
+* Hard delete
+* Soft delete
 
-Why:
+Chosen:
 
-The assignment explicitly requires detecting and surfacing problems. Meera also asked to approve deletes/changes. A preview gives the user control before the database changes.
+* Soft delete
 
-## 5. Keep duplicate rows user-reviewable
+Reason:
+Provides auditability.
 
-Options considered:
+---
 
-- Delete duplicates automatically.
-- Keep every duplicate.
-- Skip exact/fuzzy duplicates by default but show them before import.
+## Decision 6: JWT Authentication
 
-Decision:
+Options:
 
-Set duplicate rows to `skip` by default and show them in the anomaly list.
+* Session Authentication
+* JWT
 
-Why:
+Chosen:
 
-It prevents obvious double-counting while still giving the user visibility and the option to change the row status.
+* JWT
 
-## 6. Flag conflicting duplicates instead of choosing a winner
+Reason:
+Simpler API integration.
 
-Options considered:
+---
 
-- Keep the first row.
-- Keep the larger amount.
-- Keep the row whose note says another is wrong.
-- Flag both rows.
+## Decision 7: Minimum Cash Flow Algorithm
 
-Decision:
+Options:
 
-Flag both conflicting rows.
+* All pairwise debts
+* Min cash flow settlement
 
-Why:
+Chosen:
 
-Choosing a winner would be a silent guess. The CSV includes examples where descriptions differ but refer to the same dinner with different amounts. That requires human approval.
+* Min cash flow
 
-## 7. Represent membership as dated rows
+Reason:
+Provides smallest number of transactions.
 
-Options considered:
+---
 
-- Boolean active/inactive membership.
-- Separate current membership table and audit table.
-- Single `group_members` table with `joined_at` and `left_at`.
+## Decision 8: Duplicate Handling
 
-Decision:
+Options:
 
-Use one `group_members` table with join and leave dates.
+* Auto-delete
+* User approval
 
-Why:
+Chosen:
 
-Sam and Meera's requirements depend on whether someone was active on the expense date. A dated membership record directly supports that.
+* User approval
 
-## 8. Store expense splits as rows
+Reason:
+Matches Meera's requirement.
 
-Options considered:
+---
 
-- Store split details as JSON on the expense.
-- Recalculate splits every time from original inputs.
-- Store one row per expense/person share.
+## Decision 9: Name Alias Resolution
 
-Decision:
+Options:
 
-Store `expense_splits`.
+* Reject mismatched names
+* Alias mapping
 
-Why:
+Chosen:
 
-Rohan wants to trace balances to the exact expenses that created them. Split rows make balance math explainable and queryable.
+* Alias mapping
 
-## 9. Balance formula
+Reason:
+Common CSV inconsistency.
 
-Decision:
+---
 
-For each user:
+## Decision 10: Historical Membership Validation
 
-```text
-net = total_paid - total_owed - settlements_paid + settlements_received
-```
+Options:
 
-`net > 0` means the user should receive money. `net < 0` means the user owes money.
+* Ignore membership dates
+* Validate against join/leave history
 
-Why:
+Chosen:
 
-This matches the standard shared-expense accounting model and is easy to walk through manually.
+* Validate
 
-## 10. Settlement suggestion algorithm
-
-Options considered:
-
-- Pair every debtor with every creditor.
-- Greedy minimum cash-flow settlement.
-- Optimization solver.
-
-Decision:
-
-Use greedy minimum cash flow: largest debtor pays largest creditor until balances are zero.
-
-Why:
-
-It produces a small set of understandable transactions, matching Aisha's request for "who pays whom, how much."
-
-## 11. Negative CSV amounts are refunds
-
-Options considered:
-
-- Reject all negative amounts.
-- Convert negative expenses into settlements.
-- Treat negative amounts as credits/refunds.
-
-Decision:
-
-Treat negative CSV amounts as refunds/credits and keep the sign in import.
-
-Why:
-
-The CSV explicitly includes a cancelled slot refund. Rejecting it would lose real data. Treating it as a negative shared expense reduces balances correctly.
-
-## 12. Keep manual expense creation stricter than CSV import
-
-Decision:
-
-Manual expense creation rejects non-positive totals. CSV import has special handling for historical refunds.
-
-Why:
-
-Manual input should prevent accidental bad data. Historical import needs deliberate exceptions because the source file already contains messy but meaningful records.
-
-## 13. Frontend style direction
-
-Options considered:
-
-- Dark glassmorphism UI.
-- Landing-page-style UI.
-- Quiet finance/product UI.
-
-Decision:
-
-Use a restrained product UI with lighter surfaces, clearer typography, and green accents.
-
-Why:
-
-The app is a work tool for reviewing balances and anomalies. The UI should prioritize clarity over decoration.
-
+Reason:
+Matches Sam's requirement.

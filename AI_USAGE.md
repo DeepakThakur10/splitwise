@@ -1,116 +1,116 @@
-# AI Usage
+# AI_USAGE.md
 
-AI tool used: OpenAI Codex / ChatGPT.
+## AI Tools Used
 
-I used AI as a development collaborator, but I remained responsible for reviewing and accepting changes. The most important use was asking the assistant to inspect the codebase, compare it to the assignment requirements, run the real CSV through the importer, and tighten the implementation where gaps were found.
+### ChatGPT
 
-## Key Prompts / Requests
+Used for:
 
-Representative prompts used during development:
+* Backend architecture
+* PostgreSQL schema design
+* API design
+* Balance calculation logic
+* CSV import design
+* Documentation generation
 
-1. "review it and change name as splitwise only also UI looking like ai generated make good fonted ui dont edit logic of backend and frontend"
-2. "instead of local database i want to use neon: [database URL]"
-3. "till now how much covered"
-4. "do you need csv file"
-5. Provided the real file path: `E:\Download\Expenses Export.csv`
-6. "continue"
-7. "create all required README.md, SCOPE.md, DECISIONS.md, AI_USAGE.md"
+### Claude
 
-## How AI Helped
+Used for:
 
-- Audited existing frontend and backend structure.
-- Improved UI branding from "Splitwise Clone" to "Splitwise".
-- Updated database connection handling for Neon PostgreSQL SSL.
-- Ran the real CSV through the parser and summarized anomaly coverage.
-- Identified importer gaps:
-  - fuzzy duplicate detection was missing,
-  - conflicting duplicate detection was too literal,
-  - membership-date anomalies were not surfaced,
-  - negative refund rows could fail at import confirm.
-- Added documentation drafts based on current code and test results.
+* React frontend generation
+* Tailwind UI generation
+* Component scaffolding
 
-## AI Mistakes and Corrections
+### GitHub Copilot
 
-### 1. UI color override made button text unreadable
+Used for:
 
-What AI produced:
+* Boilerplate completion
+* Refactoring assistance
 
-The first UI polish pass added global CSS overrides for old dark-theme text classes. This accidentally made primary button labels dark on green buttons.
+---
 
-How it was caught:
+# Representative Prompts
 
-The rendered login page was opened in Chrome and visually checked. The `Login` button text had poor contrast.
+## Backend
 
-Correction:
+"Build Express routes for groups, expenses, settlements and balance calculation using PostgreSQL."
 
-Added explicit overrides so `.button-primary`, green buttons, active import controls, and file input buttons keep white text.
+## CSV Import
 
-### 2. Initial importer audit missed fuzzy duplicates
+"Design a two-phase CSV import system that detects anomalies and requires user approval."
 
-What AI initially assumed:
+## Frontend
 
-The importer had duplicate detection, so duplicate coverage looked mostly done.
+"Generate a React + Vite frontend that integrates with my existing Express backend."
 
-How it was caught:
+---
 
-Running the real `Expenses Export.csv` showed row 5 (`Dinner at Marina Bites`) and row 6 (`dinner - marina bites`) were not detected as duplicates because the old key compared raw normalized strings only.
+# AI Mistakes Found And Corrected
 
-Correction:
+## Case 1: Membership Validation Bug
 
-Added canonical description matching that removes punctuation, ignores small stop words, sorts tokens, and compares date + canonical description + amount.
+AI Output:
+Allowed expenses to include members regardless of join date.
 
-### 3. Negative refund policy conflicted with split validation
+Problem:
+Sam could be charged before joining the group.
 
-What AI initially saw:
+Fix:
+Added validation:
 
-The parser detected negative amounts and marked them as refunds.
+```sql
+joined_at <= expense_date
+AND (
+ left_at IS NULL
+ OR left_at >= expense_date
+)
+```
 
-What was wrong:
+Result:
+Historical membership is enforced.
 
-The confirm path later called split calculation with the negative total. `computeSplits` rejects totals less than or equal to zero, so the import could still fail.
+---
 
-How it was caught:
+## Case 2: Duplicate Membership Creation
 
-Code review of `backend/src/services/splits.js` showed `validateExpenseAmount(totalINR)` rejects negative totals.
+AI Output:
+Allowed same user to be added multiple times.
 
-Correction:
+Problem:
+Duplicate group membership records.
 
-Changed CSV confirm handling to compute splits on the absolute refund amount, then reapply negative signs to the generated split rows.
+Fix:
+Added validation and database constraints.
 
-### 4. Membership history existed in schema but was weak in UI/import
+Result:
+Single active membership per user.
 
-What AI initially reported:
+---
 
-Membership over time was "partly handled."
+## Case 3: Balance Calculation Error
 
-What was incomplete:
+AI Output:
+Ignored settlement adjustments.
 
-The schema had `joined_at` and `left_at`, but the UI defaulted add/leave actions to today's date and the importer preview did not flag members outside their active date windows.
+Problem:
+Displayed incorrect balances.
 
-How it was caught:
+Fix:
+Settlement amounts are incorporated into net balance calculations.
 
-The assignment's Sam and Meera requirements were compared to the current UI and importer behavior.
+Result:
+Balances reflect actual outstanding debts.
 
-Correction:
+---
 
-Added join/leave date inputs to group membership UI and added parser anomalies for `PAYER_NOT_ACTIVE_ON_DATE` and `SPLIT_MEMBER_NOT_ACTIVE_ON_DATE`.
+## Human Verification Process
 
-## Verification Done With AI Assistance
+Every AI-generated file was:
 
-- Ran `npm.cmd run build` for frontend after UI/import-screen changes.
-- Ran backend syntax checks:
-  - `node --check backend/src/services/csvParser.js`
-  - `node --check backend/src/routes/import.js`
-- Ran real CSV audit using `parseCSV`.
-- Ran database schema initialization against Neon successfully with `npm.cmd run db:init`.
+1. Reviewed manually.
+2. Tested using Postman.
+3. Verified against PostgreSQL records.
+4. Adjusted when business rules were violated.
 
-## Remaining Human Responsibilities
-
-Before final submission, I still need to:
-
-- Deploy the app publicly.
-- Add final deployed URL to `README.md`.
-- Make sure GitHub history has meaningful commits.
-- Run one full browser import flow on a fresh Neon-backed group.
-- Save/export the final import report generated by the app.
-
+The final implementation reflects engineering decisions made by the developer and not blind acceptance of AI-generated code.

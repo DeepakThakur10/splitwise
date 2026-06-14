@@ -1,85 +1,120 @@
-# Splitwise
+# Shared Expenses Manager
 
-A shared expenses app for a flatmate group with changing membership, multiple split types, settlements, and a two-phase CSV importer for messy historical spreadsheet data.
+A full-stack shared expense management application inspired by Splitwise, built for handling real-world messy financial data.
 
 ## Features
 
-- User registration and login with JWT authentication.
-- Create groups and manage membership over time with join and leave dates.
-- Create expenses with `equal`, `unequal`, `percentage`, and `share` split types.
-- Convert foreign currency expenses to INR using the stored FX rate on each expense.
-- View group balances and suggested minimum settlement payments.
-- Record direct settlements between members.
-- Import `Expenses Export.csv` through a preview-and-confirm workflow.
-- Surface CSV anomalies before import, with row-level findings and statuses.
+### Authentication
+
+* User Registration
+* User Login
+* JWT Authentication
+* Protected Routes
+
+### Groups
+
+* Create Groups
+* Add Members
+* Membership History Tracking
+* Member Join and Leave Dates
+
+### Expenses
+
+* Equal Splits
+* Unequal Splits
+* Percentage Splits
+* Share-Based Splits
+* Multi-Currency Support (INR/USD)
+* Historical Membership Validation
+
+### Balances
+
+* Group Balance Summary
+* Individual Net Balances
+* Minimum Cash Flow Settlement Suggestions
+
+### Settlements
+
+* Record Debt Payments
+* Settlement History
+
+### CSV Import System
+
+* Two-Phase Import
+* Import Preview
+* Anomaly Detection
+* User Approval Workflow
+* Import Logging
+
+---
 
 ## Tech Stack
 
-- Frontend: React, Vite, Tailwind CSS
-- Backend: Node.js, Express
-- Database: PostgreSQL only
-- CSV parsing: `csv-parse`
-- Auth: JWT and bcrypt password hashes
+### Frontend
 
-## Repository Structure
+* React
+* Vite
+* React Router
+* Axios
+* Tailwind CSS
 
-```text
-backend/
-  src/
-    db/
-      schema.sql
-      init.js
-      pool.js
-    routes/
-      auth.js
-      balances.js
-      expenses.js
-      groups.js
-      import.js
-      settlements.js
-      users.js
-    services/
-      csvParser.js
-      splits.js
-frontend/
-  src/
-    pages/
-    components/
-    context/
-    api/
-```
+### Backend
 
-## Setup
+* Node.js
+* Express.js
 
-### 1. Backend
+### Database
+
+* PostgreSQL (Neon)
+
+### Authentication
+
+* JWT
+
+---
+
+## Installation
+
+### Backend
+
+Clone repository:
 
 ```bash
+git clone <repository-url>
 cd backend
+```
+
+Install dependencies:
+
+```bash
 npm install
 ```
 
-Create `backend/.env`:
+Create .env file:
 
 ```env
-DATABASE_URL=postgresql://USER:PASSWORD@HOST/DB?sslmode=require
-JWT_SECRET=replace_with_a_long_random_secret
 PORT=4000
-FRONTEND_URL=http://localhost:5173
+
+DATABASE_URL=<your_postgresql_connection_string>
+
+JWT_SECRET=<your_secret>
 ```
 
-Initialize the database schema:
+Initialize database:
 
 ```bash
-npm run db:init
+node src/db/init.js
 ```
 
-Start the backend:
+Start server:
 
 ```bash
-npm run dev
+npm start
 ```
 
-### 2. Frontend
+---
+
+### Frontend
 
 ```bash
 cd frontend
@@ -87,50 +122,43 @@ npm install
 npm run dev
 ```
 
-The frontend runs at `http://localhost:5173` by default.
+---
 
-## CSV Import Flow
+## Database
 
-1. Create/register users for the people in the CSV.
-2. Create a group.
-3. Add members with correct join/leave dates:
-   - Aisha, Rohan, Priya: active from February.
-   - Meera: active through the end of March.
-   - Dev: active for the trip window.
-   - Sam: active from mid-April.
-4. Open the group.
-5. Use the `Import CSV` tab.
-6. Upload the original `Expenses Export.csv` without editing it.
-7. Review the anomaly list and row statuses.
-8. Confirm import only after deciding which flagged rows should be imported or skipped.
+PostgreSQL relational database is used.
 
-## Important Commands
+Main tables:
 
-```bash
-# backend syntax/schema
-cd backend
-npm run db:init
-npm run dev
+* users
+* groups
+* group_members
+* expenses
+* expense_splits
+* settlements
+* import_logs
+* name_aliases
 
-# frontend
-cd frontend
-npm run build
-npm run dev
-```
+---
+
+## AI Tools Used
+
+* ChatGPT (Primary Development Assistant)
+* Claude (Frontend Generation)
+* GitHub Copilot (Code Completion)
+
+---
 
 ## Deployment
 
-The app is designed for a split deployment:
+Frontend:
 
-- Backend: Render/Railway/Fly/any Node host with `DATABASE_URL`, `JWT_SECRET`, and `FRONTEND_URL`.
-- Frontend: Vercel/Netlify/static host with `VITE_API_URL` pointing to the backend API if needed.
-- Database: Neon PostgreSQL.
+* Vercel
 
-Public deployed URL: add the final deployed frontend URL here after deployment.
+Backend:
 
-## AI Used
+* Render
 
-AI assistant used: OpenAI Codex / ChatGPT as a development collaborator for implementation review, UI polish, importer auditing, and documentation drafting.
+Database:
 
-See `AI_USAGE.md` for details.
-
+* Neon PostgreSQL

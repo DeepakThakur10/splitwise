@@ -1,134 +1,110 @@
-# Shared Expenses Manager
+# SplitWise Expense Manager
 
-A full-stack shared expense management application inspired by Splitwise, built for handling real-world messy financial data.
+A full-stack shared expense management application built for managing group expenses, settlements, balance calculations, and CSV imports with anomaly detection.
 
 ## Features
 
 ### Authentication
 
-* User Registration
-* User Login
-* JWT Authentication
-* Protected Routes
+* User registration
+* User login
+* JWT authentication
 
 ### Groups
 
-* Create Groups
-* Add Members
-* Membership History Tracking
-* Member Join and Leave Dates
+* Create groups
+* Add members
+* Track membership history
+* Support members joining and leaving
 
 ### Expenses
 
-* Equal Splits
-* Unequal Splits
-* Percentage Splits
-* Share-Based Splits
-* Multi-Currency Support (INR/USD)
-* Historical Membership Validation
+* Create expenses
+* Equal split
+* Unequal split
+* Percentage split
+* Share-based split
+* Multi-currency support
+* Historical membership validation
 
 ### Balances
 
-* Group Balance Summary
-* Individual Net Balances
-* Minimum Cash Flow Settlement Suggestions
+* Group balance summary
+* Individual balances
+* Minimum cash-flow settlement suggestions
 
 ### Settlements
 
-* Record Debt Payments
-* Settlement History
+* Record payments between members
+* Track settlement history
 
-### CSV Import System
+### CSV Import
 
-* Two-Phase Import
-* Import Preview
-* Anomaly Detection
-* User Approval Workflow
-* Import Logging
+* Two-phase import
+* Preview before import
+* Anomaly detection
+* Settlement detection
+* Duplicate detection support
+* Import logs
 
----
+## Technology Stack
 
-## Tech Stack
-
-### Frontend
+Frontend
 
 * React
-* Vite
-* React Router
-* Axios
 * Tailwind CSS
+* Axios
 
-### Backend
+Backend
 
 * Node.js
 * Express.js
 
-### Database
+Database
 
 * PostgreSQL (Neon)
 
-### Authentication
+Authentication
 
 * JWT
 
----
-
-## Installation
+## Setup
 
 ### Backend
 
-Clone repository:
+Install dependencies
 
-```bash
-git clone <repository-url>
-cd backend
-```
-
-Install dependencies:
-
-```bash
 npm install
-```
 
-Create .env file:
+Create .env
 
-```env
 PORT=4000
+DATABASE_URL=your_neon_connection_string
+JWT_SECRET=your_secret
 
-DATABASE_URL=<your_postgresql_connection_string>
+Run server
 
-JWT_SECRET=<your_secret>
-```
-
-Initialize database:
-
-```bash
-node src/db/init.js
-```
-
-Start server:
-
-```bash
-npm start
-```
-
----
+npm run dev
 
 ### Frontend
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+Install dependencies
 
----
+npm install
+
+Create .env
+
+VITE_API_URL=http://localhost:4000
+
+Run frontend
+
+npm run dev
 
 ## Database
 
 PostgreSQL relational database is used.
 
-Main tables:
+Tables:
 
 * users
 * groups
@@ -139,26 +115,18 @@ Main tables:
 * import_logs
 * name_aliases
 
----
+## AI Usage
 
-## AI Tools Used
+AI was used as a development assistant for:
 
-* ChatGPT (Primary Development Assistant)
-* Claude (Frontend Generation)
-* GitHub Copilot (Code Completion)
+* Architecture discussions
+* Query generation
+* API design
+* Error debugging
+* Documentation drafting
 
----
+All generated code was reviewed, tested, and modified before use.
 
-## Deployment
+## Author
 
-Frontend:
-
-* Vercel
-
-Backend:
-
-* Render
-
-Database:
-
-* Neon PostgreSQL
+Deepak Kumar

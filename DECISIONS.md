@@ -1,159 +1,161 @@
 # DECISIONS.md
 
-## Decision 1: PostgreSQL
+## Decision 1: Membership History Tracking
 
-Options:
+### Problem
 
-* MongoDB
-* PostgreSQL
+How should group membership history be maintained?
 
-Chosen:
+### Options Considered
 
-* PostgreSQL
+1. Delete members when they leave a group
+2. Preserve historical membership records
 
-Reason:
-Assignment explicitly requires a relational database.
+### Chosen Approach
 
----
+Preserve membership history using `joined_at` and `left_at` timestamps.
 
-## Decision 2: Membership History
+### Reason
 
-Options:
-
-* Current members only
-* Historical membership records
-
-Chosen:
-
-* Historical membership records
-
-Reason:
-Required to correctly handle join and leave dates.
+Historical expense calculations must consider whether a user was a member at the time an expense occurred. Deleting membership records would make accurate historical calculations impossible.
 
 ---
 
-## Decision 3: Store Expenses In INR
+## Decision 2: Balance Calculation Model
 
-Options:
+### Problem
 
-* Store original currency
-* Store normalized INR value
+How should group balances be represented?
 
-Chosen:
+### Options Considered
 
-* Store INR value with original currency metadata
+1. Direct pairwise debts between all users
+2. Net balances per user
 
-Reason:
-Simplifies balance calculations.
+### Chosen Approach
 
----
+Net balance calculation.
 
-## Decision 4: Two-Phase CSV Import
+### Reason
 
-Options:
-
-* Direct import
-* Preview then import
-
-Chosen:
-
-* Preview then import
-
-Reason:
-Supports user approval and prevents silent data changes.
+Net balances simplify calculations and integrate naturally with settlement optimization algorithms such as Minimum Cash Flow.
 
 ---
 
-## Decision 5: Soft Delete Expenses
+## Decision 3: Settlement Storage
 
-Options:
+### Problem
 
-* Hard delete
-* Soft delete
+How should settlement transactions be recorded?
 
-Chosen:
+### Options Considered
 
-* Soft delete
+1. Modify expense records
+2. Maintain a dedicated settlement table
 
-Reason:
-Provides auditability.
+### Chosen Approach
 
----
+Separate settlement table.
 
-## Decision 6: JWT Authentication
+### Reason
 
-Options:
-
-* Session Authentication
-* JWT
-
-Chosen:
-
-* JWT
-
-Reason:
-Simpler API integration.
+Maintains a complete audit trail and clearly distinguishes expenses from debt repayments.
 
 ---
 
-## Decision 7: Minimum Cash Flow Algorithm
+## Decision 4: Currency Conversion Strategy
 
-Options:
+### Problem
 
-* All pairwise debts
-* Min cash flow settlement
+How should multi-currency imports be handled?
 
-Chosen:
+### Options Considered
 
-* Min cash flow
+1. Store original currencies only
+2. Convert all imported values into a common currency
 
-Reason:
-Provides smallest number of transactions.
+### Chosen Approach
 
----
+Convert imported values to INR using `fx_rate`.
 
-## Decision 8: Duplicate Handling
+### Reason
 
-Options:
-
-* Auto-delete
-* User approval
-
-Chosen:
-
-* User approval
-
-Reason:
-Matches Meera's requirement.
+Balance calculations require a common monetary unit to ensure consistency and correctness.
 
 ---
 
-## Decision 9: Name Alias Resolution
+## Decision 5: Handling Invalid CSV Rows
 
-Options:
+### Problem
 
-* Reject mismatched names
-* Alias mapping
+How should anomalies detected during CSV import be processed?
 
-Chosen:
+### Options Considered
 
-* Alias mapping
+1. Silent correction
+2. Automatic rejection
+3. User approval workflow
 
-Reason:
-Common CSV inconsistency.
+### Chosen Approach
+
+User approval workflow.
+
+### Reason
+
+The assignment requires anomaly visibility and user control over potentially incorrect data.
 
 ---
 
-## Decision 10: Historical Membership Validation
+## Decision 6: Expense Deletion Strategy
 
-Options:
+### Problem
 
-* Ignore membership dates
-* Validate against join/leave history
+How should deleted expenses be managed?
 
-Chosen:
+### Options Considered
 
-* Validate
+1. Hard delete
+2. Soft delete
 
-Reason:
-Matches Sam's requirement.
+### Chosen Approach
+
+Soft delete.
+
+### Reason
+
+Preserves historical reporting, auditability, and traceability of financial records.
+
+---
+
+## Decision 7: Settlement Optimization
+
+### Problem
+
+How should settlements be generated?
+
+### Options Considered
+
+1. Naive pairwise payments
+2. Minimum Cash Flow algorithm
+
+### Chosen Approach
+
+Minimum Cash Flow algorithm.
+
+### Reason
+
+Reduces the total number of transactions required to settle debts, improving usability and efficiency.
+
+---
+
+# Summary
+
+The design decisions prioritize:
+
+* Historical accuracy
+* Auditability
+* Data integrity
+* User transparency
+* Efficient debt settlement
+
+These choices ensure the system remains reliable even when memberships change, expenses are modified, or imported data contains anomalies.

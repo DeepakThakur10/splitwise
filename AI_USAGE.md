@@ -2,115 +2,165 @@
 
 ## AI Tools Used
 
-### ChatGPT
+### Primary AI Tool
 
-Used for:
+* ChatGPT
 
-* Backend architecture
-* PostgreSQL schema design
-* API design
-* Balance calculation logic
-* CSV import design
-* Documentation generation
+### Secondary AI Tool
 
-### Claude
-
-Used for:
-
-* React frontend generation
-* Tailwind UI generation
-* Component scaffolding
-
-### GitHub Copilot
-
-Used for:
-
-* Boilerplate completion
-* Refactoring assistance
+* Claude (used for UI brainstorming and design suggestions)
 
 ---
 
-# Representative Prompts
+# Key Prompts Used During Development
 
-## Backend
+## Prompt 1
 
-"Build Express routes for groups, expenses, settlements and balance calculation using PostgreSQL."
+Design a PostgreSQL schema for a SplitWise-like application that supports:
 
-## CSV Import
+* Group creation and management
+* Dynamic membership changes
+* Expense tracking
+* Settlement tracking
+* CSV import functionality
+* Historical balance calculations
 
-"Design a two-phase CSV import system that detects anomalies and requires user approval."
+## Prompt 2
 
-## Frontend
+Build RESTful Express.js APIs for:
 
-"Generate a React + Vite frontend that integrates with my existing Express backend."
+* Authentication
+* Groups
+* Expenses
+* Balances
+* Settlements
+* CSV Import Management
 
----
+using PostgreSQL as the database.
 
-# AI Mistakes Found And Corrected
+## Prompt 3
 
-## Case 1: Membership Validation Bug
+Implement balance calculation and debt simplification using the Minimum Cash Flow algorithm to minimize the number of transactions required to settle debts.
 
-AI Output:
-Allowed expenses to include members regardless of join date.
+## Prompt 4
 
-Problem:
-Sam could be charged before joining the group.
+Create anomaly detection and validation rules for imported CSV files, including:
 
-Fix:
-Added validation:
-
-```sql
-joined_at <= expense_date
-AND (
- left_at IS NULL
- OR left_at >= expense_date
-)
-```
-
-Result:
-Historical membership is enforced.
-
----
-
-## Case 2: Duplicate Membership Creation
-
-AI Output:
-Allowed same user to be added multiple times.
-
-Problem:
-Duplicate group membership records.
-
-Fix:
-Added validation and database constraints.
-
-Result:
-Single active membership per user.
+* Duplicate records
+* Invalid percentages
+* Missing participants
+* Incorrect settlement entries
 
 ---
 
-## Case 3: Balance Calculation Error
+# Cases Where AI Suggestions Were Incorrect
 
-AI Output:
-Ignored settlement adjustments.
+## Case 1: Membership History Ignored
 
-Problem:
-Displayed incorrect balances.
+### Problem
 
-Fix:
-Settlement amounts are incorporated into net balance calculations.
+The initial AI-generated balance calculation did not consider membership history.
 
-Result:
-Balances reflect actual outstanding debts.
+### Issue
+
+Users who had already left a group could still be charged for later expenses.
+
+### Fix
+
+Added membership validation using:
+
+* `joined_at`
+* `left_at`
+
+timestamps.
+
+### Result
+
+Historical expense calculations became accurate.
 
 ---
 
-## Human Verification Process
+## Case 2: Deleting Members
 
-Every AI-generated file was:
+### Problem
 
-1. Reviewed manually.
-2. Tested using Postman.
-3. Verified against PostgreSQL records.
-4. Adjusted when business rules were violated.
+AI suggested removing users from the `group_members` table when they left a group.
 
-The final implementation reflects engineering decisions made by the developer and not blind acceptance of AI-generated code.
+### Issue
+
+Historical expenses and settlements could no longer be explained correctly.
+
+### Fix
+
+Implemented soft membership tracking using the `left_at` field instead of deleting records.
+
+### Result
+
+Complete membership history is preserved.
+
+---
+
+## Case 3: Settlement Import Handling
+
+### Problem
+
+AI initially treated settlement rows as regular expenses during CSV import.
+
+### Issue
+
+Balances became incorrect because settlements reduce debt rather than create new expenses.
+
+### Fix
+
+Added settlement detection and conversion logic during import processing.
+
+### Result
+
+Settlement transactions are imported correctly and balances remain accurate.
+
+---
+
+## Case 4: Invalid Percentage Splits
+
+### Problem
+
+AI accepted percentage-based splits even when the total exceeded 100%.
+
+### Issue
+
+Expense distribution became mathematically incorrect.
+
+### Fix
+
+Added strict validation ensuring percentage totals equal exactly 100%.
+
+### Result
+
+Invalid records are rejected before insertion.
+
+---
+
+# Human Verification Process
+
+All AI-generated outputs were manually reviewed before integration, including:
+
+* Database schema design
+* SQL queries
+* Express.js API implementations
+* Balance calculation algorithms
+* CSV import logic
+* Validation rules
+
+Testing was performed using:
+
+* PostgreSQL queries
+* Postman API testing
+* Manual edge-case verification
+
+---
+
+# Final Outcome
+
+AI tools accelerated development by assisting with code generation, architecture ideas, and validation logic. However, all final engineering decisions, testing, debugging, and implementation choices were performed manually after review and verification.
+
+AI served as a productivity tool rather than a replacement for software engineering judgment.

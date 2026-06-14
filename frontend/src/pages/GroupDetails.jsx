@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { balanceApi, expenseApi, groupApi, settlementApi, usersApi } from '../api/api';
 import ExpenseCard from '../components/ExpenseCard';
 import BalanceCard from '../components/BalanceCard';
 import ExpenseModal from '../components/ExpenseModal';
 import ImportCSV from './ImportCSV';
+import { useAuth } from '../context/AuthContext';
 
 function formatDate(value) {
   if (!value) return '—';
@@ -22,12 +23,15 @@ function today() {
 
 export default function GroupDetails() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { logout } = useAuth();
   const [group, setGroup] = useState(null);
   const [expenses, setExpenses] = useState([]);
   const [balances, setBalances] = useState([]);
   const [settlementSuggestions, setSettlementSuggestions] = useState([]);
   const [settlements, setSettlements] = useState([]);
   const [error, setError] = useState('');
+  const [accessDenied, setAccessDenied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('expenses');
   const [showExpenseModal, setShowExpenseModal] = useState(false);
@@ -38,29 +42,67 @@ export default function GroupDetails() {
   const [settlementForm, setSettlementForm] = useState({ paid_to: '', amount: '', notes: '', settled_at: today() });
   const [settlementSaving, setSettlementSaving] = useState(false);
 
+  const handleAuthFailure = () => {
+    logout();
+    navigate('/login', { replace: true });
+  };
+
   const reloadAll = async () => {
     setLoading(true);
     setError('');
+    setAccessDenied(false);
     try {
-      const [groupRes, expensesRes, balanceRes, settlementRes] = await Promise.all([
-        groupApi.details(id),
+      const groupRes = await groupApi.details(id);
+
+      setGroup(groupRes.data);
+
+      const [expensesRes, balanceRes, settlementRes] = await Promise.allSettled([
         expenseApi.list(id),
         balanceApi.get(id),
         settlementApi.list(id)
       ]);
 
-      setGroup(groupRes.data);
-      setExpenses(expensesRes.data || []);
-      setBalances(balanceRes.data?.balances || []);
-      setSettlementSuggestions(balanceRes.data?.settlements || []);
-      setSettlements(settlementRes.data || []);
+      if (expensesRes.status === 'fulfilled') {
+        setExpenses(expensesRes.value.data || []);
+      } else {
+        setExpenses([]);
+      }
 
-      if (!settlementForm.paid_to && balanceRes.data?.balances?.length) {
-        const creditor = balanceRes.data.balances.find((item) => Number(item.net) < 0) || balanceRes.data.balances[0];
-        setSettlementForm((current) => ({ ...current, paid_to: creditor?.user_id ? String(creditor.user_id) : '' }));
+      if (balanceRes.status === 'fulfilled') {
+        setBalances(balanceRes.value.data?.balances || []);
+        setSettlementSuggestions(balanceRes.value.data?.settlements || []);
+
+        if (!settlementForm.paid_to && balanceRes.value.data?.balances?.length) {
+          const creditor = balanceRes.value.data.balances.find((item) => Number(item.net) < 0) || balanceRes.value.data.balances[0];
+          setSettlementForm((current) => ({ ...current, paid_to: creditor?.user_id ? String(creditor.user_id) : '' }));
+        }
+      } else {
+        setBalances([]);
+        setSettlementSuggestions([]);
+      }
+
+      if (settlementRes.status === 'fulfilled') {
+        setSettlements(settlementRes.value.data || []);
+      } else {
+        setSettlements([]);
       }
     } catch (err) {
-      setError(err?.response?.data?.error || 'Failed to load group data');
+      const status = err?.response?.status;
+      const message = err?.response?.data?.error || 'Failed to load group data';
+
+      if (status === 401) {
+        handleAuthFailure();
+        return;
+      }
+
+      if (status === 403) {
+        setAccessDenied(true);
+        setError(message);
+        setGroup(null);
+        return;
+      }
+
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -99,6 +141,10 @@ export default function GroupDetails() {
       setMemberResults([]);
       await reloadAll();
     } catch (err) {
+      if (err?.response?.status === 401) {
+        handleAuthFailure();
+        return;
+      }
       setError(err?.response?.data?.error || 'Failed to add member');
     } finally {
       setAddingMember(false);
@@ -112,6 +158,10 @@ export default function GroupDetails() {
       await groupApi.updateMember(id, userId, { left_at: today() });
       await reloadAll();
     } catch (err) {
+      if (err?.response?.status === 401) {
+        handleAuthFailure();
+        return;
+      }
       setError(err?.response?.data?.error || 'Failed to update member status');
     } finally {
       setLeaveLoading(null);
@@ -136,6 +186,10 @@ export default function GroupDetails() {
       setSettlementForm((current) => ({ ...current, amount: '', notes: '' }));
       await reloadAll();
     } catch (err) {
+      if (err?.response?.status === 401) {
+        handleAuthFailure();
+        return;
+      }
       setError(err?.response?.data?.error || 'Failed to create settlement');
     } finally {
       setSettlementSaving(false);
@@ -160,7 +214,7 @@ export default function GroupDetails() {
   if (!group) {
     return (
       <main className="mx-auto max-w-7xl px-4 py-10 text-slate-200 sm:px-6 lg:px-8">
-        <div className="glass-panel rounded-[2rem] p-8">Group not found.</div>
+        <div className="glass-panel rounded-[2rem] p-8">{accessDenied ? 'You do not have access to this group.' : (error || 'Group not found.')}</div>
       </main>
     );
   }

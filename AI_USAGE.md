@@ -51,6 +51,14 @@ Create anomaly detection and validation rules for imported CSV files, including:
 * Missing participants
 * Incorrect settlement entries
 
+## Prompt 5
+
+Build a modern, high-fidelity React user interface using Tailwind CSS and standard CSS variables for a Splitwise clone. The interface should consist of:
+
+* A Dashboard page to create and list expense groups.
+* A Group Details workspace organized into tabs: Expenses (list of cards showing splitting details), Balances (net balance grid and settlement suggestions), Settlements (payment creation form and history logs), and Import CSV (two-phase upload interface with status flags and anomaly review lists).
+* A premium design system using "glass-panel" classes, blur backdrops, responsive grid layouts, custom input fields, and smooth hover micro-animations.
+
 ---
 
 # Cases Where AI Suggestions Were Incorrect

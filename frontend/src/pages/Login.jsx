@@ -26,40 +26,40 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-app-gradient px-4 py-10 text-white sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-app-gradient px-4 py-10 text-slate-950 sm:px-6 lg:px-8">
       <div className="mx-auto grid min-h-[calc(100vh-5rem)] max-w-6xl items-center gap-8 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-6">
-          <span className="chip border-cyan-400/20 bg-cyan-400/10 text-cyan-200">Shared expenses made sharp</span>
+          <span className="chip">Splitwise</span>
           <div className="space-y-4">
-            <h1 className="max-w-2xl text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">Track groups, expenses, balances, and settlements in one place.</h1>
-            <p className="max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">Fast workflow for group spending, settlement suggestions, and CSV imports without leaving the browser.</p>
+            <h1 className="max-w-2xl text-4xl font-semibold tracking-tight sm:text-5xl">Track shared expenses without the clutter.</h1>
+            <p className="max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">Manage groups, balances, settlements, and CSV imports from one clear workspace.</p>
           </div>
         </div>
 
-        <div className="glass-panel rounded-[2rem] p-6 shadow-glow sm:p-8">
+        <div className="glass-panel rounded-xl p-6 shadow-glow sm:p-8">
           <div className="mb-8">
-            <p className="text-sm font-medium uppercase tracking-[0.22em] text-slate-400">Welcome back</p>
-            <h2 className="mt-2 text-3xl font-semibold text-white">Sign in</h2>
+            <p className="text-sm font-semibold uppercase text-slate-500">Welcome back</p>
+            <h2 className="mt-2 text-3xl font-semibold text-slate-950">Sign in</h2>
           </div>
 
-          {error ? <div className="mb-5 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div> : null}
+          {error ? <div className="mb-5 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <label className="block space-y-2">
-              <span className="text-sm text-slate-300">Email</span>
+              <span className="text-sm text-slate-600">Email</span>
               <input className="input-base" type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} placeholder="you@example.com" required />
             </label>
             <label className="block space-y-2">
-              <span className="text-sm text-slate-300">Password</span>
-              <input className="input-base" type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="••••••••" required />
+              <span className="text-sm text-slate-600">Password</span>
+              <input className="input-base" type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="Password" required />
             </label>
             <button type="submit" disabled={loading} className="button-primary w-full">
               {loading ? 'Signing in...' : 'Login'}
             </button>
           </form>
 
-          <p className="mt-6 text-sm text-slate-400">
-            New here? <Link to="/register" className="font-semibold text-cyan-300 hover:text-cyan-200">Create an account</Link>
+          <p className="mt-6 text-sm text-slate-600">
+            New here? <Link to="/register" className="font-semibold text-emerald-700 hover:text-emerald-800">Create an account</Link>
           </p>
         </div>
       </div>

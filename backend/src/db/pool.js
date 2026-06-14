@@ -5,12 +5,12 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
+const databaseUrl = process.env.DATABASE_URL || '';
+const requiresSsl = databaseUrl.includes('sslmode=require') || databaseUrl.includes('neon.tech') || databaseUrl.includes('railway');
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  // Railway / Render add SSL; local Postgres usually doesn't need it
-  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('railway')
-    ? { rejectUnauthorized: false }
-    : false,
+  connectionString: databaseUrl,
+  ssl: requiresSsl ? { rejectUnauthorized: false } : false,
 });
 
 // Quick connection test — fails loud so you know immediately if DB is wrong

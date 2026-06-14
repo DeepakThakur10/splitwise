@@ -39,9 +39,9 @@ function parseCSV(csvText, knownMembers) {
     nameMap[m.name.toLowerCase()] = m;
   }
 
-  // Track descriptions we've seen to catch duplicates
-  // Key: "date|description|amount|paid_by"
-  const seen = new Map();
+  // Track descriptions we've seen to catch duplicates.
+  const seenExact = new Map();
+  const seenByDescription = new Map();
 
   for (let i = 0; i < rawRows.length; i++) {
     const raw    = rawRows[i];
@@ -200,6 +200,13 @@ function parseCSV(csvText, knownMembers) {
       }
       row._paid_by_user_id = paidByMatch.user_id;
       row._paid_by_name    = paidByMatch.name;
+
+      if (!isActiveOn(paidByMatch, row.date)) {
+        addAnomaly(row, anomalies, rowNum, 'paid_by', 'PAYER_NOT_ACTIVE_ON_DATE',
+          `Payer "${paidByMatch.name}" was not an active group member on ${row.date}`,
+          'Review membership dates or skip this row');
+        row._status = 'flagged';
+      }
     }
 
     // ──────────────────────────────────────────────────────
@@ -216,6 +223,13 @@ function parseCSV(csvText, knownMembers) {
         unknownSplitMembers.push(name);
       } else {
         resolvedSplitWith.push({ name: match.name, user_id: match.user_id });
+
+        if (!isActiveOn(match, row.date)) {
+          addAnomaly(row, anomalies, rowNum, 'split_with', 'SPLIT_MEMBER_NOT_ACTIVE_ON_DATE',
+            `"${match.name}" was included in the split but was not active on ${row.date}`,
+            'Remove this person from the split or correct membership dates');
+          row._status = 'flagged';
+        }
       }
     }
 
@@ -257,27 +271,27 @@ function parseCSV(csvText, knownMembers) {
     // CHECK 12: Duplicate detection
     // Key = date + description (lowercased) + amount
     // ──────────────────────────────────────────────────────
-    const dupeKey = `${row.date}|${(row.description || '').toLowerCase().replace(/\s+/g, ' ')}|${amountNum}`;
-    if (seen.has(dupeKey)) {
-      const firstRow = seen.get(dupeKey);
+    const canonicalDescription = normalizeDescription(row.description);
+    const dupeKey = `${row.date}|${canonicalDescription}|${amountNum}`;
+    if (seenExact.has(dupeKey)) {
+      const firstRow = seenExact.get(dupeKey);
       addAnomaly(row, anomalies, rowNum, 'description', 'DUPLICATE_EXPENSE',
         `Duplicate of row ${firstRow}: same date, description, and amount`,
         'This row will be skipped — only the first occurrence is kept');
       row._status    = 'skip';
       row._dupeOfRow = firstRow;
     } else {
-      seen.set(dupeKey, rowNum);
+      seenExact.set(dupeKey, rowNum);
     }
 
     // ──────────────────────────────────────────────────────
     // CHECK 13: Same description, same date, DIFFERENT amounts
     // (Thalassa dinner logged twice with ₹2400 and ₹2450)
     // ──────────────────────────────────────────────────────
-    const descKey = `${row.date}|${(row.description || '').toLowerCase().replace(/\s+/g, ' ')}`;
-    // We check the already-processed results for a matching description+date with different amount
-    for (const prev of results) {
-      const prevDescKey = `${prev.date}|${(prev.description || '').toLowerCase().replace(/\s+/g, ' ')}`;
-      if (prevDescKey === descKey && Math.abs(parseFloat(prev.amount) - amountNum) > 0.01) {
+    const descKey = `${row.date}|${canonicalDescription}`;
+    const prev = seenByDescription.get(descKey);
+    if (prev) {
+      if (Math.abs(parseFloat(prev.amount) - amountNum) > 0.01) {
         addAnomaly(row, anomalies, rowNum, 'amount', 'CONFLICTING_DUPLICATE',
           `Same description+date as row ${prev._row} but different amount (${prev.amount} vs ${amountNum})`,
           'Both rows flagged — user must pick which one is correct');
@@ -290,6 +304,8 @@ function parseCSV(csvText, knownMembers) {
             'User must pick which row is correct');
         }
       }
+    } else {
+      seenByDescription.set(descKey, row);
     }
 
     // ──────────────────────────────────────────────────────
@@ -377,6 +393,29 @@ function matchName(rawName, nameMap) {
   }
 
   return null;
+}
+
+function normalizeDescription(description) {
+  return (description || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter(word => !['a', 'an', 'at', 'the', 'for', 'of'].includes(word))
+    .sort()
+    .join(' ');
+}
+
+function isActiveOn(member, date) {
+  if (!member || !date || !member.joined_at) return true;
+
+  const day = new Date(`${date}T00:00:00.000Z`);
+  const joined = new Date(member.joined_at);
+  const left = member.left_at ? new Date(member.left_at) : null;
+
+  if (Number.isNaN(day.getTime()) || Number.isNaN(joined.getTime())) return true;
+  if (day < joined) return false;
+  return !(left && day > left);
 }
 
 // Parse split_details like "Rohan 30%; Priya 40%" and sum the values

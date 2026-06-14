@@ -39,6 +39,8 @@ export default function GroupDetails() {
   const [memberResults, setMemberResults] = useState([]);
   const [addingMember, setAddingMember] = useState(false);
   const [leaveLoading, setLeaveLoading] = useState(null);
+  const [memberJoinDate, setMemberJoinDate] = useState(today());
+  const [memberLeaveDates, setMemberLeaveDates] = useState({});
   const [settlementForm, setSettlementForm] = useState({ paid_to: '', amount: '', notes: '', settled_at: today() });
   const [settlementSaving, setSettlementSaving] = useState(false);
 
@@ -136,7 +138,7 @@ export default function GroupDetails() {
     setAddingMember(true);
     setError('');
     try {
-      await groupApi.addMember(id, { user_id: userId, joined_at: today() });
+      await groupApi.addMember(id, { user_id: userId, joined_at: memberJoinDate || today() });
       setMemberQuery('');
       setMemberResults([]);
       await reloadAll();
@@ -155,7 +157,7 @@ export default function GroupDetails() {
     setLeaveLoading(userId);
     setError('');
     try {
-      await groupApi.updateMember(id, userId, { left_at: today() });
+      await groupApi.updateMember(id, userId, { left_at: memberLeaveDates[userId] || today() });
       await reloadAll();
     } catch (err) {
       if (err?.response?.status === 401) {
@@ -252,9 +254,17 @@ export default function GroupDetails() {
                       <span className="chip">Joined {formatDate(member.joined_at)}</span>
                       <span className="chip">{member.left_at ? `Left ${formatDate(member.left_at)}` : 'Active'}</span>
                       {!member.left_at ? (
-                        <button type="button" onClick={() => handleMemberLeave(member.user_id)} disabled={leaveLoading === member.user_id} className="button-secondary px-3 py-2 text-xs">
-                          {leaveLoading === member.user_id ? 'Updating...' : 'Mark left'}
-                        </button>
+                        <>
+                          <input
+                            className="input-base max-w-[150px] px-3 py-2 text-xs"
+                            type="date"
+                            value={memberLeaveDates[member.user_id] || today()}
+                            onChange={(event) => setMemberLeaveDates((current) => ({ ...current, [member.user_id]: event.target.value }))}
+                          />
+                          <button type="button" onClick={() => handleMemberLeave(member.user_id)} disabled={leaveLoading === member.user_id} className="button-secondary px-3 py-2 text-xs">
+                            {leaveLoading === member.user_id ? 'Updating...' : 'Mark left'}
+                          </button>
+                        </>
                       ) : null}
                     </div>
                   </div>
@@ -394,6 +404,7 @@ export default function GroupDetails() {
 
           <div className="mt-5 flex flex-col gap-3 lg:flex-row">
             <input className="input-base flex-1" value={memberQuery} onChange={(event) => setMemberQuery(event.target.value)} placeholder="Search users" />
+            <input className="input-base lg:max-w-[180px]" type="date" value={memberJoinDate} onChange={(event) => setMemberJoinDate(event.target.value)} />
             <button type="button" disabled className="button-secondary px-5 py-3">{addingMember ? 'Adding...' : 'Search enabled below'}</button>
           </div>
 

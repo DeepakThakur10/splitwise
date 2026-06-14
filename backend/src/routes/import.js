@@ -29,7 +29,7 @@ router.post('/preview', upload.single('file'), async (req, res) => {
   try {
     // Get group members so the parser can match names
     const membersResult = await pool.query(
-      `SELECT u.id AS user_id, u.name
+      `SELECT u.id AS user_id, u.name, gm.joined_at, gm.left_at
        FROM group_members gm
        JOIN users u ON u.id = gm.user_id
        WHERE gm.group_id = $1`,
@@ -65,7 +65,7 @@ router.post('/confirm', async (req, res) => {
 
   // Get member map for resolving user_ids
   const membersResult = await pool.query(
-    `SELECT u.id AS user_id, u.name
+    `SELECT u.id AS user_id, u.name, gm.joined_at, gm.left_at
      FROM group_members gm
      JOIN users u ON u.id = gm.user_id
      WHERE gm.group_id = $1`,
@@ -116,7 +116,10 @@ router.post('/confirm', async (req, res) => {
 
       let splits;
       try {
-        splits = buildSplitsArray(splitType, splitWith, splitDetails, amountINR, nameMap);
+        splits = buildSplitsArray(splitType, splitWith, splitDetails, Math.abs(amountINR), nameMap);
+        if (amountINR < 0) {
+          splits = splits.map(split => ({ ...split, amount: -Math.abs(split.amount) }));
+        }
       } catch (e) {
         errorRows.push({ row: row._row, reason: e.message });
         continue;

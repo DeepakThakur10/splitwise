@@ -14,6 +14,7 @@ export default function ImportCSV({ groupId, members }) {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [rows, setRows] = useState([]);
+  const [anomalies, setAnomalies] = useState([]);
   const [logs, setLogs] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -56,6 +57,7 @@ export default function ImportCSV({ groupId, members }) {
       const { data } = await importApi.preview(formData);
       setPreview(data.summary);
       setRows(data.rows || []);
+      setAnomalies(data.anomalies || []);
     } catch (err) {
       setError(err?.response?.data?.error || 'Preview failed');
     } finally {
@@ -85,6 +87,16 @@ export default function ImportCSV({ groupId, members }) {
   const updateRowStatus = (rowIndex, status) => {
     setRows((current) => current.map((row, index) => (index === rowIndex ? { ...row, _status: status } : row)));
   };
+
+  const anomaliesByRow = useMemo(() => {
+    const grouped = new Map();
+    for (const anomaly of anomalies) {
+      const current = grouped.get(anomaly.row) || [];
+      current.push(anomaly);
+      grouped.set(anomaly.row, current);
+    }
+    return grouped;
+  }, [anomalies]);
 
   return (
     <div className="space-y-6">
@@ -130,6 +142,32 @@ export default function ImportCSV({ groupId, members }) {
         </section>
       ) : null}
 
+      {anomalies.length ? (
+        <section className="glass-panel rounded-[2rem] p-6 shadow-soft">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h3 className="text-xl font-semibold text-white">Anomalies to review</h3>
+              <p className="mt-2 text-sm text-slate-400">Every detected issue is listed before import. Change row status below before confirming.</p>
+            </div>
+            <div className="chip">{anomalies.length} findings</div>
+          </div>
+
+          <div className="mt-5 grid gap-3">
+            {anomalies.map((anomaly, index) => (
+              <div key={`${anomaly.row}-${anomaly.code}-${index}`} className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="chip">Row {anomaly.row}</span>
+                  <span className="chip">{anomaly.code}</span>
+                  <span className="chip">{anomaly.type === 'auto_fixed' ? 'Auto fixed' : 'Needs review'}</span>
+                </div>
+                <p className="mt-3 text-sm text-slate-300">{anomaly.message}</p>
+                {anomaly.suggestion ? <p className="mt-1 text-sm text-slate-400">{anomaly.suggestion}</p> : null}
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       {rows.length ? (
         <section className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -150,6 +188,7 @@ export default function ImportCSV({ groupId, members }) {
                     <th className="px-4 py-3">Amount</th>
                     <th className="px-4 py-3">Paid by</th>
                     <th className="px-4 py-3">Split type</th>
+                    <th className="px-4 py-3">Findings</th>
                     <th className="px-4 py-3">Status</th>
                   </tr>
                 </thead>
@@ -162,6 +201,17 @@ export default function ImportCSV({ groupId, members }) {
                       <td className="px-4 py-3">{formatCurrency(row._amount_inr || row.amount)}</td>
                       <td className="px-4 py-3">{row._paid_by_name || row.paid_by || '—'}</td>
                       <td className="px-4 py-3">{row.split_type || 'equal'}</td>
+                      <td className="px-4 py-3">
+                        {(anomaliesByRow.get(row._row) || []).length ? (
+                          <div className="flex flex-wrap gap-1">
+                            {anomaliesByRow.get(row._row).map((anomaly, anomalyIndex) => (
+                              <span key={`${row._row}-${anomaly.code}-${anomalyIndex}`} className="chip">{anomaly.code}</span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400">None</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <select className="input-base max-w-[150px] px-3 py-2 text-sm" value={row._status} onChange={(event) => updateRowStatus(index, event.target.value)}>
                           <option value="ok">ok</option>

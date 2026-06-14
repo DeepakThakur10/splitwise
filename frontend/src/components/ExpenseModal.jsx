@@ -8,7 +8,6 @@ function formatCurrency(value) {
 const today = new Date().toISOString().slice(0, 10);
 
 export default function ExpenseModal({ open, onClose, groupId, members, onCreated }) {
-  const activeMembers = useMemo(() => members.filter((member) => !member.left_at), [members]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState({
@@ -23,6 +22,21 @@ export default function ExpenseModal({ open, onClose, groupId, members, onCreate
   });
   const [splits, setSplits] = useState([]);
 
+  const activeMembers = useMemo(() => {
+    if (!form.expense_date) return members;
+    const dateVal = new Date(`${form.expense_date}T00:00:00.000Z`).getTime();
+    if (Number.isNaN(dateVal)) return members;
+    return members.filter((member) => {
+      const joinedVal = new Date(member.joined_at).getTime();
+      const leftVal = member.left_at ? new Date(member.left_at).getTime() : null;
+
+      if (Number.isNaN(joinedVal)) return true;
+      if (dateVal < joinedVal) return false;
+      if (leftVal && dateVal > leftVal) return false;
+      return true;
+    });
+  }, [members, form.expense_date]);
+
   useEffect(() => {
     if (!open) return;
     const defaultMembers = activeMembers.map((member) => ({
@@ -32,12 +46,18 @@ export default function ExpenseModal({ open, onClose, groupId, members, onCreate
       value: ''
     }));
     setSplits(defaultMembers);
-    setForm((current) => ({
-      ...current,
-      paid_by: activeMembers[0]?.user_id ? String(activeMembers[0].user_id) : ''
-    }));
+    setForm({
+      description: '',
+      amount: '',
+      currency: 'INR',
+      fx_rate: 1,
+      paid_by: activeMembers[0]?.user_id ? String(activeMembers[0].user_id) : '',
+      expense_date: today,
+      split_type: 'equal',
+      notes: ''
+    });
     setError('');
-  }, [open, activeMembers]);
+  }, [open]);
 
   useEffect(() => {
     setSplits((current) => {
@@ -51,6 +71,20 @@ export default function ExpenseModal({ open, onClose, groupId, members, onCreate
           value: previous?.value ?? ''
         };
       });
+    });
+  }, [activeMembers]);
+
+  useEffect(() => {
+    setForm((current) => {
+      if (activeMembers.length > 0) {
+        const isStillActive = activeMembers.some((m) => String(m.user_id) === String(current.paid_by));
+        if (!isStillActive) {
+          return { ...current, paid_by: String(activeMembers[0].user_id) };
+        }
+      } else {
+        return { ...current, paid_by: '' };
+      }
+      return current;
     });
   }, [activeMembers]);
 

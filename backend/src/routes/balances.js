@@ -79,8 +79,8 @@ router.get('/', async (req, res) => {
     // Apply settlements
     for (const s of settledResult.rows) {
       const amount = parseFloat(s.total);
-      net[s.paid_by] = (net[s.paid_by] || 0) - amount; // payer gets credit
-      net[s.paid_to] = (net[s.paid_to] || 0) + amount; // receiver is more owed
+      net[s.paid_by] = (net[s.paid_by] || 0) + amount; // payer owes less (gets credit)
+      net[s.paid_to] = (net[s.paid_to] || 0) - amount; // receiver is owed less
     }
 
     const balances = userIds.map(id => ({

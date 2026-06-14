@@ -356,10 +356,14 @@ export default function GroupDetails() {
 
             <div className="grid gap-4">
               {expenses.length ? expenses.map((expense) => (
-                <ExpenseCard key={expense.id} expense={expense} onDelete={async (expenseId) => {
-                  await expenseApi.remove(expenseId);
-                  await reloadAll();
-                }} />
+                <ExpenseCard 
+                  key={expense.id} 
+                  expense={expense} 
+                  onDelete={Number(expense.paid_by) === Number(user?.id) ? async (expenseId) => {
+                    await expenseApi.remove(expenseId);
+                    await reloadAll();
+                  } : null} 
+                />
               )) : (
                 <div className="glass-panel rounded-[2rem] p-8 text-center text-slate-300">No expenses yet.</div>
               )}

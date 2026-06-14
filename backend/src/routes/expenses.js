@@ -258,9 +258,8 @@ const result = await pool.query(
 [group_id]
 );
 
-```
 res.json(result.rows);
-```
+
 
 } catch (err) {
 console.error('List expenses error:', err);
@@ -301,7 +300,6 @@ const result = await pool.query(
 [req.params.id]
 );
 
-```
 if (!result.rows.length) {
   return res.status(404).json({
     error: 'Expense not found'
@@ -309,7 +307,7 @@ if (!result.rows.length) {
 }
 
 res.json(result.rows[0]);
-```
+
 
 } catch (err) {
 console.error('Get expense error:', err);
@@ -336,7 +334,6 @@ const result = await pool.query(
 [req.params.id, req.user.id]
 );
 
-```
 if (!result.rows.length) {
   return res.status(404).json({
     error: 'Expense not found or not owned by you'
@@ -347,7 +344,7 @@ res.json({
   message: 'Expense deleted',
   id: result.rows[0].id
 });
-```
+
 
 } catch (err) {
 console.error('Delete expense error:', err);

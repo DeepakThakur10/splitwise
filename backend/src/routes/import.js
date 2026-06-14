@@ -132,7 +132,7 @@ router.post('/confirm', async (req, res) => {
 
       let splits;
       try {
-        splits = buildSplitsArray(splitType, splitWith, splitDetails, Math.abs(amountINR), nameMap);
+        splits = buildSplitsArray(splitType, splitWith, splitDetails, Math.abs(amountINR), nameMap, row.date);
         if (amountINR < 0) {
           splits = splits.map(split => ({ ...split, amount: -Math.abs(split.amount) }));
         }
@@ -360,7 +360,19 @@ function formatImportReport(log) {
   return lines.join('\n');
 }
 
-function buildSplitsArray(splitType, splitWith, splitDetails, totalINR, nameMap) {
+function isActiveOn(member, date) {
+  if (!member || !date || !member.joined_at) return true;
+
+  const day = new Date(`${date}T00:00:00.000Z`);
+  const joined = new Date(member.joined_at);
+  const left = member.left_at ? new Date(member.left_at) : null;
+
+  if (Number.isNaN(day.getTime()) || Number.isNaN(joined.getTime())) return true;
+  if (day < joined) return false;
+  return !(left && day > left);
+}
+
+function buildSplitsArray(splitType, splitWith, splitDetails, totalINR, nameMap, date) {
   const { computeSplits } = require('../services/splits');
 
   // Parse split_details string into values
@@ -375,7 +387,13 @@ function buildSplitsArray(splitType, splitWith, splitDetails, totalINR, nameMap)
     }
   }
 
-  const splits = splitWith.map(member => {
+  // Filter splitWith to only include members active on the expense date
+  const activeSplitWith = splitWith.filter(member => {
+    const m = nameMap[member.name.toLowerCase()];
+    return m && isActiveOn(m, date);
+  });
+
+  const splits = activeSplitWith.map(member => {
     const value = detailMap[member.name.toLowerCase()];
     return {
       user_id: member.user_id,
@@ -383,7 +401,7 @@ function buildSplitsArray(splitType, splitWith, splitDetails, totalINR, nameMap)
     };
   });
 
-  if (splits.length === 0) throw new Error('No valid split members');
+  if (splits.length === 0) throw new Error('No active split members on this date');
 
   return computeSplits(splitType, totalINR, splits);
 }

@@ -279,8 +279,8 @@ async function getGroupNetBalances(groupId) {
     const paidBy = Number(row.paid_by);
     const paidTo = Number(row.paid_to);
     const total = Number(row.total || 0);
-    net.set(paidBy, (net.get(paidBy) || 0) - total);
-    net.set(paidTo, (net.get(paidTo) || 0) + total);
+    net.set(paidBy, (net.get(paidBy) || 0) + total);
+    net.set(paidTo, (net.get(paidTo) || 0) - total);
   }
 
   return net;

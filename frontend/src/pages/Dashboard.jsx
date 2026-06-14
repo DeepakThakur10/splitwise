@@ -6,11 +6,16 @@ function formatDate(value) {
   return new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium' }).format(new Date(value));
 }
 
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export default function Dashboard() {
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [groupName, setGroupName] = useState('');
+  const [groupJoinDate, setGroupJoinDate] = useState(today());
   const [saving, setSaving] = useState(false);
 
   const loadGroups = async () => {
@@ -35,8 +40,9 @@ export default function Dashboard() {
     setSaving(true);
     setError('');
     try {
-      await groupApi.create({ name: groupName });
+      await groupApi.create({ name: groupName, joined_at: groupJoinDate || today() });
       setGroupName('');
+      setGroupJoinDate(today());
       await loadGroups();
     } catch (err) {
       setError(err?.response?.data?.error || 'Failed to create group');
@@ -65,6 +71,7 @@ export default function Dashboard() {
 
           <form onSubmit={handleCreate} className="mt-6 flex flex-col gap-3 sm:flex-row">
             <input className="input-base flex-1" value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder="Create a new group" required />
+            <input className="input-base sm:max-w-[180px]" type="date" value={groupJoinDate} onChange={(event) => setGroupJoinDate(event.target.value)} required />
             <button type="submit" disabled={saving} className="button-primary min-w-40">
               {saving ? 'Creating...' : 'Create group'}
             </button>

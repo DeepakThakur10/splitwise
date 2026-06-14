@@ -88,6 +88,22 @@ export default function ImportCSV({ groupId, members }) {
     setRows((current) => current.map((row, index) => (index === rowIndex ? { ...row, _status: status } : row)));
   };
 
+  const downloadReport = async (logId, format) => {
+    try {
+      const { data } = await importApi.report(logId, format);
+      const url = URL.createObjectURL(data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `import-report-${logId}.${format === 'pdf' ? 'pdf' : 'txt'}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError(`Failed to download ${format.toUpperCase()} report`);
+    }
+  };
+
   const anomaliesByRow = useMemo(() => {
     const grouped = new Map();
     for (const anomaly of anomalies) {
@@ -266,6 +282,7 @@ export default function ImportCSV({ groupId, members }) {
                   <th className="px-4 py-3">Imported</th>
                   <th className="px-4 py-3">Skipped</th>
                   <th className="px-4 py-3">Flagged</th>
+                  <th className="px-4 py-3">Reports</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800 bg-slate-950/50 text-slate-200">
@@ -277,10 +294,16 @@ export default function ImportCSV({ groupId, members }) {
                     <td className="px-4 py-3">{log.imported}</td>
                     <td className="px-4 py-3">{log.skipped}</td>
                     <td className="px-4 py-3">{log.flagged}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={() => downloadReport(log.id, 'txt')} className="button-secondary px-3 py-2 text-xs">Download TXT</button>
+                        <button type="button" onClick={() => downloadReport(log.id, 'pdf')} className="button-secondary px-3 py-2 text-xs">Download PDF</button>
+                      </div>
+                    </td>
                   </tr>
                 )) : (
                   <tr>
-                    <td className="px-4 py-6 text-center text-slate-400" colSpan={6}>No import history yet.</td>
+                    <td className="px-4 py-6 text-center text-slate-400" colSpan={7}>No import history yet.</td>
                   </tr>
                 )}
               </tbody>

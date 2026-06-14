@@ -148,6 +148,28 @@ Reduces the total number of transactions required to settle debts, improving usa
 
 ---
 
+## Decision 8: Admin Joining Date Correction
+
+### Problem
+
+The group creator may need to set or correct their own joining date, but repeated edits would make historical balances unstable.
+
+### Options Considered
+
+1. Allow unlimited edits
+2. Prevent all edits after group creation
+3. Allow one creator-only correction and then lock it
+
+### Chosen Approach
+
+Allow one creator-only correction and store `joined_at_locked` on `group_members`.
+
+### Reason
+
+This lets legacy or mistaken creator dates be fixed once, while preventing later changes from silently rewriting historical expense eligibility.
+
+---
+
 # Summary
 
 The design decisions prioritize:

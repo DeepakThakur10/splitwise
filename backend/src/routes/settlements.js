@@ -84,6 +84,30 @@ router.post('/', async (req, res) => {
       });
     }
 
+    const balances = await getGroupNetBalances(group_id);
+    const payerNet = balances.get(Number(paid_by)) || 0;
+    const receiverNet = balances.get(Number(paid_to)) || 0;
+    const paymentAmount = Number(amount);
+
+    if (payerNet >= 0) {
+      return res.status(400).json({
+        error: 'You do not currently owe a balance in this group'
+      });
+    }
+
+    if (receiverNet <= 0) {
+      return res.status(400).json({
+        error: 'Selected recipient is not currently owed money'
+      });
+    }
+
+    const maxAllowed = Math.min(Math.abs(payerNet), receiverNet);
+    if (paymentAmount - maxAllowed > 0.01) {
+      return res.status(400).json({
+        error: `Settlement amount cannot exceed your current owed balance of ${maxAllowed.toFixed(2)}`
+      });
+    }
+
     const result = await pool.query(
       `
       INSERT INTO settlements(
@@ -212,5 +236,54 @@ router.get('/user/:userId', async (req, res) => {
     });
   }
 });
+
+async function getGroupNetBalances(groupId) {
+  const paidResult = await pool.query(
+    `SELECT paid_by AS user_id, SUM(amount) AS total_paid
+     FROM expenses
+     WHERE group_id = $1 AND is_deleted = FALSE
+     GROUP BY paid_by`,
+    [groupId]
+  );
+
+  const owesResult = await pool.query(
+    `SELECT es.user_id, SUM(es.amount) AS total_owes
+     FROM expense_splits es
+     JOIN expenses e ON e.id = es.expense_id
+     WHERE e.group_id = $1 AND e.is_deleted = FALSE
+     GROUP BY es.user_id`,
+    [groupId]
+  );
+
+  const settledResult = await pool.query(
+    `SELECT paid_by, paid_to, SUM(amount) AS total
+     FROM settlements
+     WHERE group_id = $1
+     GROUP BY paid_by, paid_to`,
+    [groupId]
+  );
+
+  const net = new Map();
+
+  for (const row of paidResult.rows) {
+    const userId = Number(row.user_id);
+    net.set(userId, (net.get(userId) || 0) + Number(row.total_paid || 0));
+  }
+
+  for (const row of owesResult.rows) {
+    const userId = Number(row.user_id);
+    net.set(userId, (net.get(userId) || 0) - Number(row.total_owes || 0));
+  }
+
+  for (const row of settledResult.rows) {
+    const paidBy = Number(row.paid_by);
+    const paidTo = Number(row.paid_to);
+    const total = Number(row.total || 0);
+    net.set(paidBy, (net.get(paidBy) || 0) - total);
+    net.set(paidTo, (net.get(paidTo) || 0) + total);
+  }
+
+  return net;
+}
 
 module.exports = router;

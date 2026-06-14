@@ -8,12 +8,31 @@ const router = express.Router();
 
 router.use(auth);
 
+async function requireGroupAdmin(req, res, groupId) {
+  const result = await pool.query(
+    'SELECT created_by FROM groups WHERE id = $1',
+    [groupId]
+  );
+
+  if (!result.rows.length) {
+    res.status(404).json({ error: 'Group not found' });
+    return false;
+  }
+
+  if (Number(result.rows[0].created_by) !== Number(req.user.id)) {
+    res.status(403).json({ error: 'Forbidden' });
+    return false;
+  }
+
+  return true;
+}
+
 // =====================================================
 // CREATE GROUP
 // POST /api/groups
 // =====================================================
 router.post('/', async (req, res) => {
-  const { name } = req.body;
+  const { name, joined_at } = req.body;
 
   if (!name || !name.trim()) {
     return res.status(400).json({
@@ -42,11 +61,12 @@ router.post('/', async (req, res) => {
       INSERT INTO group_members(
         group_id,
         user_id,
-        joined_at
+        joined_at,
+        joined_at_locked
       )
-      VALUES($1, $2, CURRENT_DATE)
+      VALUES($1, $2, $3, TRUE)
       `,
-      [group.id, req.user.id]
+      [group.id, req.user.id, joined_at || new Date().toISOString().slice(0, 10)]
     );
 
     await client.query('COMMIT');
@@ -127,7 +147,10 @@ router.get('/:id', async (req, res) => {
     }
 
     const groupResult = await pool.query(
-      `SELECT * FROM groups WHERE id = $1`,
+      `SELECT g.*, u.name AS created_by_name
+       FROM groups g
+       LEFT JOIN users u ON u.id = g.created_by
+       WHERE g.id = $1`,
       [groupId]
     );
 
@@ -142,6 +165,7 @@ router.get('/:id', async (req, res) => {
       SELECT
         gm.id,
         gm.joined_at,
+        gm.joined_at_locked,
         gm.left_at,
         u.id AS user_id,
         u.name,
@@ -188,22 +212,7 @@ router.post('/:id/members', async (req, res) => {
   }
 
   try {
-    const memberCheck = await pool.query(
-      `
-      SELECT id
-      FROM group_members
-      WHERE group_id = $1
-      AND user_id = $2
-      AND left_at IS NULL
-      `,
-      [groupId, req.user.id]
-    );
-
-    if (!memberCheck.rows.length) {
-      return res.status(403).json({
-        error: 'Only active members can add users'
-      });
-    }
+    if (!(await requireGroupAdmin(req, res, groupId))) return;
 
     const existingMember = await pool.query(
       `
@@ -227,9 +236,10 @@ router.post('/:id/members', async (req, res) => {
       INSERT INTO group_members(
         group_id,
         user_id,
-        joined_at
+        joined_at,
+        joined_at_locked
       )
-      VALUES($1,$2,$3)
+      VALUES($1,$2,$3,TRUE)
       RETURNING *
       `,
       [
@@ -255,30 +265,40 @@ router.put('/:id/members/:userId', async (req, res) => {
   const groupId = parseInt(req.params.id);
   const userId = parseInt(req.params.userId);
 
-  const { left_at } = req.body;
-
-  if (!left_at) {
-    return res.status(400).json({
-      error: 'left_at date is required'
-    });
-  }
+  const { joined_at } = req.body;
+  const leftAt = req.body.left_at || new Date().toISOString().slice(0, 10);
 
   try {
-    const memberCheck = await pool.query(
-      `
-      SELECT id
-      FROM group_members
-      WHERE group_id = $1
-      AND user_id = $2
-      AND left_at IS NULL
-      `,
-      [groupId, req.user.id]
-    );
+    if (!(await requireGroupAdmin(req, res, groupId))) return;
 
-    if (!memberCheck.rows.length) {
-      return res.status(403).json({
-        error: 'Only active members can update membership'
-      });
+    if (joined_at) {
+      if (Number(userId) !== Number(req.user.id)) {
+        return res.status(403).json({
+          error: 'Only the admin can update their own joining date'
+        });
+      }
+
+      const result = await pool.query(
+        `
+        UPDATE group_members
+        SET
+          joined_at = $1,
+          joined_at_locked = TRUE
+        WHERE group_id = $2
+        AND user_id = $3
+        AND joined_at_locked = FALSE
+        RETURNING *
+        `,
+        [joined_at, groupId, userId]
+      );
+
+      if (!result.rows.length) {
+        return res.status(400).json({
+          error: 'Joining date can only be updated once'
+        });
+      }
+
+      return res.json(result.rows[0]);
     }
 
     const result = await pool.query(
@@ -290,7 +310,7 @@ router.put('/:id/members/:userId', async (req, res) => {
       AND left_at IS NULL
       RETURNING *
       `,
-      [left_at, groupId, userId]
+      [leftAt, groupId, userId]
     );
 
     if (!result.rows.length) {
@@ -303,6 +323,36 @@ router.put('/:id/members/:userId', async (req, res) => {
 
   } catch (err) {
     console.error('Leave member error:', err);
+    res.status(500).json({
+      error: 'Server error'
+    });
+  }
+});
+
+// =====================================================
+// DELETE GROUP
+// DELETE /api/groups/:id
+// =====================================================
+router.delete('/:id', async (req, res) => {
+  const groupId = parseInt(req.params.id);
+
+  if (isNaN(groupId)) {
+    return res.status(400).json({
+      error: 'Invalid group id'
+    });
+  }
+
+  try {
+    if (!(await requireGroupAdmin(req, res, groupId))) return;
+
+    await pool.query(
+      'DELETE FROM groups WHERE id = $1',
+      [groupId]
+    );
+
+    res.json({ message: 'Group deleted', id: groupId });
+  } catch (err) {
+    console.error('Delete group error:', err);
     res.status(500).json({
       error: 'Server error'
     });

@@ -35,6 +35,7 @@ id
 group_id
 user_id
 joined_at
+joined_at_locked
 left_at
 
 ## expenses

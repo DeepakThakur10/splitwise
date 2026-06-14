@@ -27,9 +27,20 @@ CREATE TABLE IF NOT EXISTS group_members (
   group_id    INT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
   user_id     INT NOT NULL REFERENCES users(id),
   joined_at   DATE NOT NULL DEFAULT CURRENT_DATE,
+  joined_at_locked BOOLEAN NOT NULL DEFAULT FALSE,
   left_at     DATE,                      -- NULL = still a member
   UNIQUE(group_id, user_id, joined_at)   -- allow re-joining
 );
+
+ALTER TABLE group_members
+ADD COLUMN IF NOT EXISTS joined_at_locked BOOLEAN NOT NULL DEFAULT FALSE;
+
+UPDATE group_members gm
+SET joined_at_locked = TRUE
+FROM groups g
+WHERE gm.group_id = g.id
+AND gm.user_id = g.created_by
+AND gm.joined_at <> g.created_at::date;
 
 -- An expense paid by one person
 CREATE TABLE IF NOT EXISTS expenses (

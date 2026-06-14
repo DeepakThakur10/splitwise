@@ -23,7 +23,8 @@ export const groupApi = {
   create: (payload) => api.post('/api/groups', payload),
   details: (id) => api.get(`/api/groups/${id}`),
   addMember: (id, payload) => api.post(`/api/groups/${id}/members`, payload),
-  updateMember: (id, userId, payload) => api.put(`/api/groups/${id}/members/${userId}`, payload)
+  updateMember: (id, userId, payload) => api.put(`/api/groups/${id}/members/${userId}`, payload),
+  remove: (id) => api.delete(`/api/groups/${id}`)
 };
 
 export const usersApi = {
@@ -49,7 +50,8 @@ export const settlementApi = {
 export const importApi = {
   preview: (formData) => api.post('/api/import/preview', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   confirm: (payload) => api.post('/api/import/confirm', payload),
-  logs: (groupId) => api.get('/api/import/logs', { params: { group_id: groupId } })
+  logs: (groupId) => api.get('/api/import/logs', { params: { group_id: groupId } }),
+  report: (logId, format = 'txt') => api.get(`/api/import/report/${logId}${format === 'pdf' ? '/pdf' : ''}`, { responseType: 'blob' })
 };
 
 export default api;

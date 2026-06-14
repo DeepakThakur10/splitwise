@@ -7,6 +7,7 @@
 
 const express = require('express');
 const multer  = require('multer');
+const PDFDocument = require('pdfkit');
 const pool    = require('../db/pool');
 const auth    = require('../middleware/auth');
 const { parseCSV }      = require('../services/csvParser');
@@ -80,14 +81,23 @@ router.post('/confirm', async (req, res) => {
   const importedIds  = [];
   const skippedRows  = [];
   const errorRows    = [];
+  const reportIssues = [];
 
   try {
     await client.query('BEGIN');
 
     for (const row of rows) {
+      collectRowIssues(row, reportIssues);
+
       // Skip rows the user didn't approve
       if (row._status === 'skip') {
         skippedRows.push({ row: row._row, reason: 'skipped by user or auto-skip' });
+        reportIssues.push({
+          row: row._row,
+          code: 'ROW_SKIPPED',
+          message: 'Row skipped by user or auto-skip policy',
+          action: 'Skipped'
+        });
         continue;
       }
 
@@ -104,6 +114,12 @@ router.post('/confirm', async (req, res) => {
 
       if (!paidByUserId) {
         errorRows.push({ row: row._row, reason: `Cannot resolve payer: ${row.paid_by}` });
+        reportIssues.push({
+          row: row._row,
+          code: 'PAYER_RESOLUTION_FAILED',
+          message: `Cannot resolve payer: ${row.paid_by}`,
+          action: 'Rejected'
+        });
         continue;
       }
 
@@ -122,6 +138,12 @@ router.post('/confirm', async (req, res) => {
         }
       } catch (e) {
         errorRows.push({ row: row._row, reason: e.message });
+        reportIssues.push({
+          row: row._row,
+          code: 'SPLIT_BUILD_FAILED',
+          message: e.message,
+          action: 'Rejected'
+        });
         continue;
       }
 
@@ -167,7 +189,12 @@ router.post('/confirm', async (req, res) => {
         importedIds.length,
         skippedRows.length,
         errorRows.length,
-        JSON.stringify({ skipped: skippedRows, errors: errorRows }),
+        JSON.stringify({
+          imported: importedIds,
+          skipped: skippedRows,
+          errors: errorRows,
+          issues: reportIssues
+        }),
       ]
     );
 
@@ -185,6 +212,47 @@ router.post('/confirm', async (req, res) => {
     res.status(500).json({ error: `Import failed: ${err.message}` });
   } finally {
     client.release();
+  }
+});
+
+router.get('/report/:logId', async (req, res) => {
+  try {
+    const log = await loadImportLogForUser(req.params.logId, req.user.id);
+    if (!log) return res.status(404).json({ error: 'Import log not found' });
+
+    const report = formatImportReport(log);
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="import-report-${log.id}.txt"`);
+    res.send(report);
+  } catch (err) {
+    console.error('TXT report error:', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.get('/report/:logId/pdf', async (req, res) => {
+  try {
+    const log = await loadImportLogForUser(req.params.logId, req.user.id);
+    if (!log) return res.status(404).json({ error: 'Import log not found' });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="import-report-${log.id}.pdf"`);
+
+    const doc = new PDFDocument({ margin: 48 });
+    doc.pipe(res);
+
+    doc.fontSize(18).text('Import Report', { underline: true });
+    doc.moveDown();
+    doc.fontSize(11);
+
+    for (const line of formatImportReport(log).split('\n')) {
+      doc.text(line || ' ');
+    }
+
+    doc.end();
+  } catch (err) {
+    console.error('PDF report error:', err.message);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -219,6 +287,77 @@ async function importSettlement(client, groupId, row, nameMap) {
      VALUES ($1,$2,$3,$4,$5,$6)`,
     [groupId, paidBy, recipient, Math.abs(parseFloat(row.amount)), row.date, row.notes]
   );
+}
+
+async function loadImportLogForUser(logId, userId) {
+  const result = await pool.query(
+    `SELECT il.*
+     FROM import_logs il
+     JOIN group_members gm ON gm.group_id = il.group_id
+     WHERE il.id = $1 AND gm.user_id = $2`,
+    [logId, userId]
+  );
+
+  return result.rows[0] || null;
+}
+
+function collectRowIssues(row, issues) {
+  const rowIssues = [
+    ...(row._anomalies || []),
+    ...(row._autoFixed || [])
+  ];
+
+  for (const issue of rowIssues) {
+    issues.push({
+      row: issue.row || row._row,
+      code: issue.code,
+      message: issue.message,
+      action: issue.type === 'auto_fixed' ? 'Auto fixed' : row._status === 'skip' ? 'Skipped' : 'Needs review'
+    });
+  }
+}
+
+function formatImportReport(log) {
+  const payload = log.anomalies || {};
+  const issues = Array.isArray(payload.issues) ? payload.issues : [
+    ...(payload.skipped || []).map(item => ({
+      row: item.row,
+      code: 'ROW_SKIPPED',
+      message: item.reason,
+      action: 'Skipped'
+    })),
+    ...(payload.errors || []).map(item => ({
+      row: item.row,
+      code: 'IMPORT_ERROR',
+      message: item.reason,
+      action: 'Rejected'
+    }))
+  ];
+
+  const lines = [
+    'Import Report',
+    '',
+    `File: ${log.filename || 'expenses_export.csv'}`,
+    `Imported: ${log.imported || 0}`,
+    `Skipped: ${log.skipped || 0}`,
+    `Errors: ${log.flagged || 0}`,
+    '',
+    'Detected Issues:',
+    ''
+  ];
+
+  if (!issues.length) {
+    lines.push('No issues detected.');
+  }
+
+  for (const issue of issues) {
+    lines.push(`Row ${issue.row || 'N/A'}`);
+    lines.push(issue.code ? `${issue.code}: ${issue.message || ''}` : (issue.message || 'Issue detected'));
+    lines.push(`Action: ${issue.action || 'Needs review'}`);
+    lines.push('');
+  }
+
+  return lines.join('\n');
 }
 
 function buildSplitsArray(splitType, splitWith, splitDetails, totalINR, nameMap) {

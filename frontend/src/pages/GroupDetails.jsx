@@ -21,10 +21,21 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function toDateInputValue(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export default function GroupDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const [group, setGroup] = useState(null);
   const [expenses, setExpenses] = useState([]);
   const [balances, setBalances] = useState([]);
@@ -40,7 +51,7 @@ export default function GroupDetails() {
   const [addingMember, setAddingMember] = useState(false);
   const [leaveLoading, setLeaveLoading] = useState(null);
   const [memberJoinDate, setMemberJoinDate] = useState(today());
-  const [memberLeaveDates, setMemberLeaveDates] = useState({});
+  const [adminJoinDate, setAdminJoinDate] = useState('');
   const [settlementForm, setSettlementForm] = useState({ paid_to: '', amount: '', notes: '', settled_at: today() });
   const [settlementSaving, setSettlementSaving] = useState(false);
 
@@ -71,12 +82,14 @@ export default function GroupDetails() {
       }
 
       if (balanceRes.status === 'fulfilled') {
-        setBalances(balanceRes.value.data?.balances || []);
-        setSettlementSuggestions(balanceRes.value.data?.settlements || []);
+        const nextBalances = balanceRes.value.data?.balances || [];
+        const nextSettlementSuggestions = balanceRes.value.data?.settlements || [];
+        setBalances(nextBalances);
+        setSettlementSuggestions(nextSettlementSuggestions);
 
-        if (!settlementForm.paid_to && balanceRes.value.data?.balances?.length) {
-          const creditor = balanceRes.value.data.balances.find((item) => Number(item.net) < 0) || balanceRes.value.data.balances[0];
-          setSettlementForm((current) => ({ ...current, paid_to: creditor?.user_id ? String(creditor.user_id) : '' }));
+        if (!settlementForm.paid_to && nextSettlementSuggestions.length) {
+          const myPayment = nextSettlementSuggestions.find((item) => Number(item.from) === Number(user?.id));
+          setSettlementForm((current) => ({ ...current, paid_to: myPayment?.to ? String(myPayment.to) : current.paid_to }));
         }
       } else {
         setBalances([]);
@@ -133,6 +146,19 @@ export default function GroupDetails() {
   }, [memberQuery]);
 
   const activeMembers = useMemo(() => group?.members?.filter((member) => !member.left_at) || [], [group]);
+  const isAdmin = Number(group?.created_by) === Number(user?.id);
+  const currentMember = useMemo(() => activeMembers.find((member) => Number(member.user_id) === Number(user?.id)), [activeMembers, user?.id]);
+  const adminMembership = useMemo(
+    () => group?.members?.find((member) => Number(member.user_id) === Number(group?.created_by)),
+    [group]
+  );
+  const canCorrectAdminJoinDate = Boolean(isAdmin && adminMembership && !adminMembership.joined_at_locked);
+  const settlementRecipients = useMemo(
+    () => settlementSuggestions
+      .filter((item) => Number(item.from) === Number(user?.id))
+      .map((item) => ({ user_id: item.to, name: item.to_name, amount: item.amount })),
+    [settlementSuggestions, user?.id]
+  );
 
   const handleAddMember = async (userId) => {
     setAddingMember(true);
@@ -157,7 +183,7 @@ export default function GroupDetails() {
     setLeaveLoading(userId);
     setError('');
     try {
-      await groupApi.updateMember(id, userId, { left_at: memberLeaveDates[userId] || today() });
+      await groupApi.updateMember(id, userId, {});
       await reloadAll();
     } catch (err) {
       if (err?.response?.status === 401) {
@@ -170,13 +196,45 @@ export default function GroupDetails() {
     }
   };
 
+  const handleAdminJoinDateUpdate = async () => {
+    const nextJoinDate = adminJoinDate || toDateInputValue(adminMembership?.joined_at);
+    if (!nextJoinDate) return;
+
+    setError('');
+    try {
+      await groupApi.updateMember(id, user.id, { joined_at: nextJoinDate });
+      setAdminJoinDate('');
+      await reloadAll();
+    } catch (err) {
+      if (err?.response?.status === 401) {
+        handleAuthFailure();
+        return;
+      }
+      setError(err?.response?.data?.error || 'Failed to update admin joining date');
+    }
+  };
+
+  const handleDeleteGroup = async () => {
+    setError('');
+    try {
+      await groupApi.remove(id);
+      navigate('/dashboard', { replace: true });
+    } catch (err) {
+      if (err?.response?.status === 401) {
+        handleAuthFailure();
+        return;
+      }
+      setError(err?.response?.data?.error || 'Failed to delete group');
+    }
+  };
+
   const handleSettlementSubmit = async (event) => {
     event.preventDefault();
     setSettlementSaving(true);
     setError('');
 
     try {
-      const payer = activeMembers[0]?.user_id;
+      const payer = user?.id;
       await settlementApi.create({
         group_id: Number(id),
         paid_by: Number(payer),
@@ -229,7 +287,7 @@ export default function GroupDetails() {
             <div>
               <p className="chip mb-3">Group details</p>
               <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">{group.name}</h1>
-              <p className="mt-2 text-sm text-slate-400">Created {formatDate(group.created_at)} by user {group.created_by}</p>
+              <p className="mt-2 text-sm text-slate-400">Created {formatDate(group.created_at)} by {group.created_by_name || `user ${group.created_by}`}</p>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -237,34 +295,37 @@ export default function GroupDetails() {
               <span className="chip">{activeMembers.length} active members</span>
               <span className="chip">{expenses.length} expenses</span>
               <span className="chip">{settlements.length} settlements</span>
+              {isAdmin ? <span className="chip">Admin</span> : null}
             </div>
           </div>
 
           <div className="w-full max-w-xl rounded-[1.75rem] border border-slate-800 bg-slate-950/50 p-5">
-            <h2 className="text-lg font-semibold text-white">Members</h2>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold text-white">Members</h2>
+              {isAdmin ? (
+                <button type="button" onClick={handleDeleteGroup} className="button-secondary px-3 py-2 text-xs">
+                  Delete group
+                </button>
+              ) : null}
+            </div>
             <div className="mt-4 space-y-3">
               {group.members.map((member) => (
                 <div key={member.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <p className="font-medium text-white">{member.name}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium text-white">{member.name}</p>
+                        {Number(member.user_id) === Number(group.created_by) ? <span className="chip">Admin</span> : null}
+                      </div>
                       <p className="text-sm text-slate-400">{member.email}</p>
                     </div>
                     <div className="flex flex-wrap gap-2 text-xs text-slate-300">
                       <span className="chip">Joined {formatDate(member.joined_at)}</span>
                       <span className="chip">{member.left_at ? `Left ${formatDate(member.left_at)}` : 'Active'}</span>
-                      {!member.left_at ? (
-                        <>
-                          <input
-                            className="input-base max-w-[150px] px-3 py-2 text-xs"
-                            type="date"
-                            value={memberLeaveDates[member.user_id] || today()}
-                            onChange={(event) => setMemberLeaveDates((current) => ({ ...current, [member.user_id]: event.target.value }))}
-                          />
-                          <button type="button" onClick={() => handleMemberLeave(member.user_id)} disabled={leaveLoading === member.user_id} className="button-secondary px-3 py-2 text-xs">
-                            {leaveLoading === member.user_id ? 'Updating...' : 'Mark left'}
-                          </button>
-                        </>
+                      {isAdmin && !member.left_at ? (
+                        <button type="button" onClick={() => handleMemberLeave(member.user_id)} disabled={leaveLoading === member.user_id} className="button-secondary px-3 py-2 text-xs">
+                          {leaveLoading === member.user_id ? 'Updating...' : 'Mark left'}
+                        </button>
                       ) : null}
                     </div>
                   </div>
@@ -345,14 +406,14 @@ export default function GroupDetails() {
               <form onSubmit={handleSettlementSubmit} className="mt-6 space-y-4">
                 <label className="space-y-2 block">
                   <span className="text-sm text-slate-300">Paid by</span>
-                  <input className="input-base" value={activeMembers[0]?.name || 'You'} disabled />
+                  <input className="input-base" value={currentMember?.name || user?.name || 'You'} disabled />
                 </label>
                 <label className="space-y-2 block">
                   <span className="text-sm text-slate-300">Paid to</span>
                   <select className="input-base" value={settlementForm.paid_to} onChange={(event) => setSettlementForm({ ...settlementForm, paid_to: event.target.value })} required>
                     <option value="">Select recipient</option>
-                    {balances.map((balance) => (
-                      <option key={balance.user_id} value={balance.user_id}>{balance.name}</option>
+                    {settlementRecipients.map((recipient) => (
+                      <option key={recipient.user_id} value={recipient.user_id}>{recipient.name}</option>
                     ))}
                   </select>
                 </label>
@@ -398,9 +459,26 @@ export default function GroupDetails() {
       </section>
 
       <section className="mt-8 space-y-6">
-        <div className="glass-panel rounded-[2rem] p-6 shadow-soft">
+        {isAdmin ? <div className="glass-panel rounded-[2rem] p-6 shadow-soft">
           <h2 className="text-xl font-semibold text-white">Add member</h2>
           <p className="mt-2 text-sm text-slate-400">Search by name or email, then add the selected user to this group.</p>
+
+          {canCorrectAdminJoinDate ? (
+            <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+              <p className="text-sm font-semibold text-white">Correct your joining date</p>
+              <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+                <input
+                  className="input-base sm:max-w-[180px]"
+                  type="date"
+                  value={adminJoinDate || toDateInputValue(adminMembership.joined_at)}
+                  onChange={(event) => setAdminJoinDate(event.target.value)}
+                />
+                <button type="button" onClick={handleAdminJoinDateUpdate} className="button-secondary px-5 py-3">
+                  Save once
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           <div className="mt-5 flex flex-col gap-3 lg:flex-row">
             <input className="input-base flex-1" value={memberQuery} onChange={(event) => setMemberQuery(event.target.value)} placeholder="Search users" />
@@ -423,7 +501,7 @@ export default function GroupDetails() {
           ) : memberQuery.length >= 2 ? (
             <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/50 p-4 text-sm text-slate-400">No matching users found.</div>
           ) : null}
-        </div>
+        </div> : null}
 
         <div className="glass-panel rounded-[2rem] p-6 shadow-soft">
           <h2 className="text-xl font-semibold text-white">Member timeline</h2>
